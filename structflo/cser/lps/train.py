@@ -123,6 +123,8 @@ def train(
     device_str: str = "cuda",
     seed: int = 42,
     resume: Path | None = None,
+    finetune: Path | None = None,
+    reject_negatives: bool = False,
 ) -> Path:
     """Train the PairScorer and return the path to the best checkpoint."""
     torch.manual_seed(seed)
@@ -136,6 +138,8 @@ def train(
     print(f"[lps] epochs      : {epochs}  batch: {batch_size}")
     if resume:
         print(f"[lps] resume      : {resume}")
+    if finetune:
+        print(f"[lps] finetune    : {finetune}")
 
     # ------------------------------------------------------------------
     # Datasets
@@ -148,7 +152,10 @@ def train(
         bbox_jitter=bbox_jitter,
         augment=True,  # rotation/flip/brightness augmentation
         seed=seed,
+        reject_negatives=reject_negatives,
     )
+    if reject_negatives:
+        print("[lps] reject-negatives ENABLED (unlabelled + fp_negatives/ as target-0)")
     print(f"[lps] train pairs : {len(train_ds):,}  ({time.time() - t0:.1f}s)")
 
     print("[lps] building validation dataset …")
@@ -204,10 +211,19 @@ def train(
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
 
     # ------------------------------------------------------------------
-    # Resume from checkpoint
+    # Load checkpoint (resume vs finetune)
     # ------------------------------------------------------------------
     start_epoch = 1
     best_acc = 0.0
+
+    if resume is not None and finetune is not None:
+        raise ValueError("Cannot use both --resume and --finetune")
+
+    if finetune is not None:
+        # Fine-tune: load weights only, fresh optimizer/scheduler/epoch
+        ckpt = torch.load(finetune, map_location=device, weights_only=False)
+        model.load_state_dict(ckpt["state_dict"])
+        print(f"[lps] loaded weights from {finetune}  (fresh optimizer, lr={lr})")
 
     if resume is not None:
         ckpt = torch.load(resume, map_location=device, weights_only=False)
@@ -325,6 +341,17 @@ def main() -> None:
         default=None,
         help="Resume from scorer_last.pt (restores model, optimizer, scheduler, epoch)",
     )
+    p.add_argument(
+        "--finetune",
+        type=Path,
+        default=None,
+        help="Fine-tune from a checkpoint (loads weights only, fresh optimizer/scheduler)",
+    )
+    p.add_argument(
+        "--reject-negatives",
+        action="store_true",
+        help="Add rejection negatives (unlabelled structures + fp_negatives/ sidecar) to the train set",
+    )
 
     args = p.parse_args()
 
@@ -341,6 +368,8 @@ def main() -> None:
         device_str=args.device,
         seed=args.seed,
         resume=args.resume,
+        finetune=args.finetune,
+        reject_negatives=args.reject_negatives,
     )
 
 

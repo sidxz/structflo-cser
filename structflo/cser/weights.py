@@ -78,6 +78,13 @@ REGISTRY: dict[str, dict[str, dict]] = {
             "sha256": "8b6d7373bedef50e25a48ef6ac333962d18861d30f98ee33f393cdf3d38f1c26",
             "requires": ">=0.1.0,<1.0.0",
         },
+        "v0.3": {
+            "repo_id":  "sidxz/structflo-cser-detector",
+            "filename": "best.pt",
+            "revision": "weights-v0.3",
+            "sha256":   "b45ec5c0f1b2919a6bdda52051800f5610d9008f1ad7b3db5041fa222abb8626",
+            "requires": ">=0.1.0,<1.0.0",
+        },
     },
     "cser-lps": {
         # Populate after first training run and HF Hub publish:
@@ -95,14 +102,21 @@ REGISTRY: dict[str, dict[str, dict]] = {
             "sha256": "6b80327fe13b67b183e86558e8bac9141e6d1412e948c745b7ba5cfeb2df7b7d",
             "requires": ">=0.1.0,<1.0.0",
         },
+        "v0.2": {
+            "repo_id":  "sidxz/structflo-cser-lps",
+            "filename": "best.pt",
+            "revision": "weights-v0.2",
+            "sha256":   "67d8c129645415ecf19aa62ac818ee894cdc0b70519ff67d1c84a73152ca11e6",
+            "requires": ">=0.1.0,<1.0.0",
+        },
     },
 }
 
 # The version resolved when the caller does not specify one.
 # Keep in sync with REGISTRY — point to the newest entry per model.
 LATEST: dict[str, str | None] = {
-    "cser-detector": "v0.2",
-    "cser-lps": "v0.1",  # set to "v1.0" after first publish
+    "cser-detector": "v0.3",
+    "cser-lps": "v0.2",  # set to "v1.0" after first publish
 }
 
 

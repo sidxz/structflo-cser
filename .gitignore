@@ -44,6 +44,9 @@ archive/
 # ── Project: datasets & generated data ───────────────────────────────────────
 /data/
 
+# ── Unpublished paper drafts (confidential — keep off git, code only) ────────
+docs/*draft*.md
+
 # ── Model weights ─────────────────────────────────────────────────────────────
 # Weights are published to HF Hub — never commit .pt files directly.
 # Exception: commit weights.py (the registry) but not the binaries.

@@ -12,7 +12,6 @@ from PIL import Image
 from structflo.cser.inference.detector import detect_full, detect_tiled
 from structflo.cser.weights import resolve_weights
 
-from structflo.cser.lps import LearnedMatcher
 from structflo.cser.pipeline.matcher import BaseMatcher
 from structflo.cser.pipeline.models import BBox, CompoundPair, Detection
 from structflo.cser.pipeline.ocr import BaseOCR, EasyOCRExtractor
@@ -88,7 +87,11 @@ class ChemPipeline:
                               Defaults to True to match training data distribution.
         """
         self._weights = weights  # version tag, local path str/Path, or None
-        self._matcher = matcher or LearnedMatcher()
+        if matcher is None:
+            from structflo.cser.lps import LearnedMatcher
+
+            matcher = LearnedMatcher()
+        self._matcher = matcher
         self._smiles = smiles_extractor or DecimerExtractor()
         self._ocr = ocr or EasyOCRExtractor()
         self.tile = tile

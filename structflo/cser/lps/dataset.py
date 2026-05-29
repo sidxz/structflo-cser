@@ -241,11 +241,21 @@ class LPSDataset(Dataset):
         bbox_jitter: float = 0.02,
         augment: bool = False,
         seed: int = 42,
+        reject_negatives: bool = False,
     ) -> None:
+        """
+        Args (added):
+            reject_negatives: If True, also emit "this structure has no valid
+                label" negatives — pairing each unlabelled GT structure and each
+                box listed in an optional ``fp_negatives/<stem>.json`` sidecar
+                (mined detector false-positives) with its nearest labels,
+                target 0.  Trains the scorer to reject distractor structures.
+        """
         self.data_dir = Path(data_dir)
         self.bbox_jitter = bbox_jitter
         self.augment = augment
         self._seed = seed
+        self.reject_negatives = reject_negatives
         self._build(neg_per_pos)
 
     # ------------------------------------------------------------------
@@ -265,6 +275,8 @@ class LPSDataset(Dataset):
     def _build(self, neg_per_pos: int) -> None:
         gt_dir = self.data_dir / "ground_truth"
         img_dir = self.data_dir / "images"
+        fp_dir = self.data_dir / "fp_negatives"
+        has_fp = fp_dir.exists()
 
         json_files = sorted(gt_dir.glob("*.json"))
         if not json_files:
@@ -313,6 +325,29 @@ class LPSDataset(Dataset):
                 label_bboxes.append(labels[i])
                 page_sizes.append([float(page_w), float(page_h)])
                 targets.append(1)
+
+            # Rejection negatives: structures with NO valid label (unlabelled GT
+            # structures + mined detector false-positives) paired with their
+            # nearest labels — target 0.  Teaches the scorer to reject distractors.
+            if self.reject_negatives:
+                distractors = [
+                    e["struct_bbox"] for e in entries if e.get("label_bbox") is None
+                ]
+                if has_fp:
+                    fp_file = fp_dir / f"{stem}.json"
+                    if fp_file.exists():
+                        distractors.extend(json.loads(fp_file.read_text()))
+                for db in distractors:
+                    wrong = sorted(
+                        ((self._dist(db, labels[j]), j) for j in range(n)),
+                        key=lambda t: t[0],
+                    )
+                    for _, j in wrong[:neg_per_pos]:
+                        path_indices.append(pid)
+                        struct_bboxes.append(db)
+                        label_bboxes.append(labels[j])
+                        page_sizes.append([float(page_w), float(page_h)])
+                        targets.append(0)
 
             if n < 2:
                 continue

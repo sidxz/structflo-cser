@@ -12,7 +12,8 @@ Ground-truth JSON schema (pair format):
     ]
 
 YOLO .txt (written only when pairs are non-empty):
-    0  cx  cy  w  h   (normalised 0-1; class 0 = compound_panel = union bbox)
+    0  cx  cy  w  h   (normalised 0-1; class 0 = chemical_structure)
+    1  cx  cy  w  h   (normalised 0-1; class 1 = compound_label)
 
 Annotation states:
     - GT JSON absent  → page not yet visited
@@ -47,7 +48,7 @@ def save(page_id: str, pairs: list[dict], img_w: int, img_h: int,
     GT JSON is *always* written (even for empty pages) so the page is
     tracked as 'done'.  YOLO .txt is only written when pairs are present.
 
-    YOLO bounding box = union of struct_bbox and label_bbox (class 0).
+    YOLO labels: class 0 = chemical_structure, class 1 = compound_label.
     """
     gt_dir = output_dir / "ground_truth"
     gt_dir.mkdir(parents=True, exist_ok=True)
@@ -75,14 +76,17 @@ def save(page_id: str, pairs: list[dict], img_w: int, img_h: int,
             s = pair["struct_bbox"]          # [x1, y1, x2, y2]
             l = pair.get("label_bbox")       # [x1, y1, x2, y2] or None
 
-            if l:
-                x1 = min(s[0], l[0]);  y1 = min(s[1], l[1])
-                x2 = max(s[2], l[2]);  y2 = max(s[3], l[3])
-            else:
-                x1, y1, x2, y2 = s
+            # class 0 = chemical_structure
+            sx1, sy1, sx2, sy2 = s
+            f.write(
+                f"0 {(sx1 + sx2) / 2 / img_w:.6f} {(sy1 + sy2) / 2 / img_h:.6f} "
+                f"{(sx2 - sx1) / img_w:.6f} {(sy2 - sy1) / img_h:.6f}\n"
+            )
 
-            cx = (x1 + x2) / 2 / img_w
-            cy = (y1 + y2) / 2 / img_h
-            w  = (x2 - x1) / img_w
-            h  = (y2 - y1) / img_h
-            f.write(f"0 {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}\n")
+            # class 1 = compound_label
+            if l:
+                lx1, ly1, lx2, ly2 = l
+                f.write(
+                    f"1 {(lx1 + lx2) / 2 / img_w:.6f} {(ly1 + ly2) / 2 / img_h:.6f} "
+                    f"{(lx2 - lx1) / img_w:.6f} {(ly2 - ly1) / img_h:.6f}\n"
+                )
