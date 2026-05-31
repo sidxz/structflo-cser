@@ -110,6 +110,16 @@ REGISTRY: dict[str, dict[str, dict]] = {
             "requires": ">=0.1.0,<1.0.0",
         },
     },
+    # Relational (set-to-set / Sinkhorn) matcher (det-trained variant).
+    "cser-relmatcher": {
+        "v0.1": {
+            "repo_id": "sidxz/structflo-cser-relmatcher",
+            "filename": "best.pt",
+            "revision": "weights-v0.1",
+            "sha256": "1493d138e71a56e2f7a553d869bd458a65315a1186ea568a7a797f81aa7efa7f",
+            "requires": ">=0.3.0,<1.0.0",
+        },
+    },
 }
 
 # The version resolved when the caller does not specify one.
@@ -117,6 +127,7 @@ REGISTRY: dict[str, dict[str, dict]] = {
 LATEST: dict[str, str | None] = {
     "cser-detector": "v0.3",
     "cser-lps": "v0.2",  # set to "v1.0" after first publish
+    "cser-relmatcher": "v0.1",
 }
 
 

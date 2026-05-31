@@ -68,6 +68,7 @@ class ChemPipeline:
         ocr: BaseOCR | None = None,
         tile: bool = False,
         tile_size: int = 1536,
+        imgsz: int = 1280,
         conf: float = 0.3,
         grayscale: bool = True,
     ) -> None:
@@ -76,26 +77,38 @@ class ChemPipeline:
             weights:          Weights version tag (e.g. ``"v1.0"``) or path to a
                               local ``.pt`` file.  ``None`` auto-downloads the
                               latest published weights.
-            matcher:          Pairing strategy.  Defaults to LearnedMatcher
-                              (auto-downloads weights from HuggingFace Hub).
+            matcher:          Pairing strategy.  Defaults to RelationalMatcher
+                              (geometry-only optimal-transport matcher; the best
+                              learned matcher in our benchmark and the strongest
+                              at rejecting unlabelled structures).  Weights
+                              auto-download from HuggingFace Hub.  Pass
+                              ``HungarianMatcher()`` for a zero-weight
+                              distance baseline, or ``LearnedMatcher()`` for the
+                              visual LPS.
             smiles_extractor: SMILES model.  Defaults to DecimerExtractor.
             ocr:              OCR engine.  Defaults to PaddleOCRExtractor.
             tile:             Use sliding-window tiling during detection.
             tile_size:        Tile side length in pixels.
+            imgsz:            Inference resolution for full-image (non-tiled)
+                              detection.  Defaults to 1280, the training
+                              resolution; full-image detection at 1280 strictly
+                              outperforms tiling on large landscape pages.
             conf:             YOLO confidence threshold.
             grayscale:        Convert input images to grayscale before detection.
                               Defaults to True to match training data distribution.
         """
         self._weights = weights  # version tag, local path str/Path, or None
         if matcher is None:
-            from structflo.cser.lps import LearnedMatcher
+            # Lazy import breaks a relmatch <-> pipeline circular import.
+            from structflo.cser.relmatch import RelationalMatcher
 
-            matcher = LearnedMatcher()
+            matcher = RelationalMatcher()
         self._matcher = matcher
         self._smiles = smiles_extractor or DecimerExtractor()
         self._ocr = ocr or EasyOCRExtractor()
         self.tile = tile
         self.tile_size = tile_size
+        self.imgsz = imgsz
         self.conf = conf
         self.grayscale = grayscale
         self._model = None  # ultralytics YOLO — lazy-loaded on first detect() call
@@ -135,7 +148,7 @@ class ChemPipeline:
                 self._model, img_np, tile_size=self.tile_size, conf=self.conf
             )
         else:
-            raw = detect_full(self._model, img_np, conf=self.conf)
+            raw = detect_full(self._model, img_np, conf=self.conf, imgsz=self.imgsz)
         return [Detection.from_dict(d) for d in raw]
 
     def match(

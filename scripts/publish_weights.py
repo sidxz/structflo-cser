@@ -24,7 +24,6 @@ python scripts/publish_weights.py --model cser-lps --version v1.0 \\
 from __future__ import annotations
 
 import argparse
-import ast
 import hashlib
 import re
 import sys
@@ -43,12 +42,17 @@ MODEL_REPOS: dict[str, dict] = {
         "repo_id":  "sidxz/structflo-cser-lps",
         "filename": "best.pt",
     },
+    "cser-relmatcher": {
+        "repo_id":  "sidxz/structflo-cser-relmatcher",
+        "filename": "best.pt",
+    },
 }
 
 # Default weights file paths per model (relative to project root)
 DEFAULT_WEIGHTS_PATHS: dict[str, str] = {
     "cser-detector": "runs/labels_detect/yolo11l_panels/weights/best.pt",
     "cser-lps":      "runs/lps/best.pt",
+    "cser-relmatcher": "runs/relmatch_det/best.pt",
 }
 
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -95,6 +99,10 @@ def upload(repo_id: str, filename: str, weights_file: Path, version: str, dry_ru
     from huggingface_hub import HfApi
     api = HfApi()
 
+    # Ensure the repo exists (no-op if it already does). New models need this
+    # on their first publish; existing repos (detector, lps) are unaffected.
+    api.create_repo(repo_id=repo_id, repo_type="model", exist_ok=True)
+
     print(f"Uploading {weights_file} ({weights_file.stat().st_size / 1e6:.1f} MB) ...")
     commit = api.upload_file(
         path_or_fileobj=str(weights_file),
@@ -115,7 +123,7 @@ def upload(repo_id: str, filename: str, weights_file: Path, version: str, dry_ru
         tag_message=f"weights {version}",
         revision=sha,
     )
-    print(f"Tagged.")
+    print("Tagged.")
     return sha
 
 
@@ -236,6 +244,23 @@ def main() -> None:
         help="Path to .pt file.  Defaults to the standard YOLO output location.",
     )
     p.add_argument(
+        "--filename",
+        default=None,
+        help="Filename inside the HF repo (default: the model's registered filename). "
+        "Use to host an extra checkpoint variant in the same repo without "
+        "changing the registry default.",
+    )
+    p.add_argument(
+        "--no-registry",
+        action="store_true",
+        help="Upload the file only; do not patch weights.py (for variant uploads).",
+    )
+    p.add_argument(
+        "--yes",
+        action="store_true",
+        help="Skip the interactive confirmation prompt.",
+    )
+    p.add_argument(
         "--requires",
         default=None,
         help="PEP 440 specifier for compatible pkg versions, e.g. '>=0.1.0,<1.0.0'. "
@@ -264,6 +289,7 @@ def main() -> None:
 
     # --- Summary ------------------------------------------------------------
     repo_info = MODEL_REPOS[args.model]
+    repo_filename = args.filename or repo_info["filename"]
     hf_tag = f"weights-{args.version}"
     sha256 = sha256_of(weights_file)
 
@@ -271,12 +297,13 @@ def main() -> None:
     print(f"Version:       {args.version}  (HF tag: {hf_tag})")
     print(f"Weights file:  {weights_file}  ({weights_file.stat().st_size / 1e6:.1f} MB)")
     print(f"HF repo:       {repo_info['repo_id']}")
+    print(f"HF filename:   {repo_filename}")
     print(f"sha256:        {sha256}")
     print(f"requires:      {requires}")
     print(f"Dry-run:       {args.dry_run}")
     print()
 
-    if not args.dry_run:
+    if not args.dry_run and not args.yes:
         confirm = input("Proceed? [y/N] ").strip().lower()
         if confirm != "y":
             print("Aborted.")
@@ -285,27 +312,30 @@ def main() -> None:
     # --- Upload -------------------------------------------------------------
     upload(
         repo_id=repo_info["repo_id"],
-        filename=repo_info["filename"],
+        filename=repo_filename,
         weights_file=weights_file,
         version=args.version,
         dry_run=args.dry_run,
     )
 
     # --- Patch weights.py ---------------------------------------------------
-    meta = {
-        "repo_id":  repo_info["repo_id"],
-        "filename": repo_info["filename"],
-        "sha256":   sha256,
-        "requires": requires,
-    }
-    patch_weights_py(args.model, args.version, meta, dry_run=args.dry_run)
+    if args.no_registry:
+        print("Skipping weights.py patch (--no-registry).")
+    else:
+        meta = {
+            "repo_id":  repo_info["repo_id"],
+            "filename": repo_filename,
+            "sha256":   sha256,
+            "requires": requires,
+        }
+        patch_weights_py(args.model, args.version, meta, dry_run=args.dry_run)
 
     print()
     if args.dry_run:
         print("Dry-run complete. Re-run without --dry-run to publish.")
     else:
         print("Done. Commit the change to weights.py:")
-        print(f"  git add structflo/cser/weights.py")
+        print("  git add structflo/cser/weights.py")
         print(f"  git commit -m 'weights: publish {args.version}'")
 
 
