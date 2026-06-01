@@ -60,11 +60,26 @@ def main():
     ap.add_argument("--lps", type=Path, default=Path("runs/lps_finetune/best.pt"))
     ap.add_argument("--min-score", type=float, default=0.5)
     ap.add_argument("--conf", type=float, default=0.3)
+    ap.add_argument("--mode", default="tiled",
+                    choices=["tiled", "full640", "full1280", "full2048"],
+                    help="detection strategy")
     args = ap.parse_args()
 
     from ultralytics import YOLO
 
     model = YOLO(str(args.detector))
+
+    def run_detect(img_np):
+        if args.mode == "tiled":
+            return detect_tiled(model, img_np, tile_size=1536, conf=args.conf)
+        imgsz = {"full640": 640, "full1280": 1280, "full2048": 2048}[args.mode]
+        res = model(img_np, conf=args.conf, imgsz=imgsz, verbose=False)[0]
+        out = []
+        for box in res.boxes:
+            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+            out.append({"bbox": [float(x1), float(y1), float(x2), float(y2)],
+                        "conf": float(box.conf[0]), "class_id": int(box.cls[0])})
+        return out
     hung = HungarianMatcher()
     lps = LearnedMatcher(weights=str(args.lps), min_score=args.min_score)
 
@@ -90,7 +105,7 @@ def main():
         if not ip.exists():
             continue
         img_np = np.array(Image.open(ip).convert("L").convert("RGB"))
-        raw = detect_tiled(model, img_np, tile_size=1536, conf=args.conf)
+        raw = run_detect(img_np)
         dets = [Detection.from_dict(d) for d in raw]
         det_s = [d.bbox.as_list() for d in dets if d.class_id == 0]
         det_l = [d.bbox.as_list() for d in dets if d.class_id == 1]

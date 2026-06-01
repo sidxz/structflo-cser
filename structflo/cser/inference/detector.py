@@ -62,9 +62,16 @@ def detect_tiled(
     ]
 
 
-def detect_full(model: YOLO, img: np.ndarray, conf: float = 0.3) -> list[dict]:
-    """Run YOLO inference on a single full image (no tiling)."""
-    results = model(img, conf=conf, verbose=False)[0]
+def detect_full(
+    model: YOLO, img: np.ndarray, conf: float = 0.3, imgsz: int = 1280
+) -> list[dict]:
+    """Run YOLO inference on a single full image (no tiling).
+
+    ``imgsz`` defaults to 1280 to match the detector's training resolution.
+    Leaving it at the ultralytics default (640) markedly degrades recall and
+    box localisation on large pages (see scripts/finetune/lps/diag_label_recall.py).
+    """
+    results = model(img, conf=conf, imgsz=imgsz, verbose=False)[0]
     out = []
     for box in results.boxes:
         x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
@@ -124,6 +131,7 @@ def process_image(
     tile: bool,
     tile_size: int,
     conf: float,
+    imgsz: int = 1280,
     rescale_dpi: int = 0,
     grayscale: bool = False,
     do_pair: bool = False,
@@ -156,7 +164,7 @@ def process_image(
     if tile:
         detections = detect_tiled(model, img_np, tile_size=tile_size, conf=conf)
     else:
-        detections = detect_full(model, img_np, conf=conf)
+        detections = detect_full(model, img_np, conf=conf, imgsz=imgsz)
 
     orig_pil = Image.open(image_path).convert("RGB")
     if scale != 1.0:
@@ -204,6 +212,12 @@ def main() -> None:
         "--conf", type=float, default=0.3, help="Detection confidence threshold"
     )
     p.add_argument("--tile_size", type=int, default=1536)
+    p.add_argument(
+        "--imgsz",
+        type=int,
+        default=1280,
+        help="Inference resolution for full-image (no-tile) detection",
+    )
     p.add_argument(
         "--no_tile", action="store_true", help="Run on full image instead of tiling"
     )
@@ -264,6 +278,7 @@ def main() -> None:
                 tile=not args.no_tile,
                 tile_size=args.tile_size,
                 conf=args.conf,
+                imgsz=args.imgsz,
                 rescale_dpi=args.rescale_dpi,
                 grayscale=args.grayscale,
                 do_pair=args.pair,

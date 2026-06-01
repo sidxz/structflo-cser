@@ -35,6 +35,7 @@ sf-annotate             = "annotate.__main__:main"
 sf-extract              = "structflo.cser.pipeline.cli:main"
 sf-train-lps            = "structflo.cser.lps.train:main"
 sf-eval-lps             = "structflo.cser.lps.evaluate:main"
+sf-train-relmatch       = "structflo.cser.relmatch.train:main"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]

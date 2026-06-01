@@ -119,16 +119,25 @@ ChemPipeline.to_records(pairs)
 - **Architecture**: YOLO11l (ultralytics)
 - **Classes**: 2 — `chemical_structure` (0), `compound_label` (1)
 - **Training image size**: 1280px
-- **Inference**: sliding-window tiling (1536px tiles, 20% overlap) + per-class NMS
+- **Inference**: full-image at imgsz=1280 (the training resolution) is the default and
+  strictly outperforms tiling on large landscape pages — verified on real_test: label
+  recall 53%→80%, struct 93%→99%, 5× fewer false positives, end-to-end pairing F1 0.41→0.82.
+  Sliding-window tiling (1536px tiles, 20% overlap, per-class NMS) remains available via
+  `tile=True` for very dense pages, but cuts labels at tile boundaries.
 - **Training config**: AdamW, cosine LR, grayscale images, no colour augmentation
 - **Runs directory**: `runs/labels_detect/`
 - **YOLO data config**: `config/data.yaml`
 
 ## Matching strategies
 
-1. **HungarianMatcher** — centroid Euclidean distance + `scipy.optimize.linear_sum_assignment`
+1. **HungarianMatcher** — centroid Euclidean distance + `scipy.optimize.linear_sum_assignment`.
+   Parameter-free; strong baseline on clean detections.
 2. **LearnedMatcher** (LPS) — CNN scorer produces association probability per (struct, label) pair,
-   then Hungarian on `1 - score`. Default in ChemPipeline.
+   then Hungarian on `1 - score`.
+3. **RelationalMatcher** (`structflo/cser/relmatch/`) — geometry-only transformer over all page
+   detections + Sinkhorn optimal transport with learnable dustbins (SuperGlue-style). **Default in
+   ChemPipeline.** Best learned matcher in the benchmark (matches distance on assignment, best at
+   rejecting unlabelled structures). Weights: `cser-relmatcher` (HF Hub).
 
 ## Weights system
 
